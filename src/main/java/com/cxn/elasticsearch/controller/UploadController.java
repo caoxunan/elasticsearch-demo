@@ -13,9 +13,14 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.sql.DataSource;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,15 +37,19 @@ public class UploadController {
 
     static final Logger LOGGER = LoggerFactory.getLogger(UploadController.class);
 
+    @Autowired
+    private DataSource dataSource;
     /**
      * 初始化uuid的随机数组
      */
     public static List<String> uuidList;
 
     static {
-         uuidList = new ArrayList<>(30000000);
+        uuidList = new ArrayList<>(30000000);
 
-        File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/jsonfile/uuidFile");
+        // File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/jsonfile/uuidFile");
+        File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/sqlitefile/uuidFile");
+
         FileReader fileReader = null;
         try {
 
@@ -50,7 +59,7 @@ public class UploadController {
             String temp = "";
             int i = 0;
             while ((temp = bufferedReader.readLine()) != null) {
-                if (i % 1000000 == 0){
+                if (i % 1000000 == 0) {
 
                     LOGGER.info("正在初始化随机集合～,已完成 " + i + "条数据。");
                 }
@@ -75,11 +84,9 @@ public class UploadController {
     public static long specificTime = 40;
 
     /**
-     *
      * 临时记录访问次数
      * key:当前第n次访问
      * value：查询ES花费的时间（大于指定时间才会被记录）
-     *
      */
     public static Map<Long, String> map = new ConcurrentHashMap<>();
 
@@ -87,19 +94,19 @@ public class UploadController {
     private TransportClient client;
 
     @GetMapping(value = "/")
-    public String upload(){
+    public String upload() {
         return "upload";
     }
 
     @GetMapping(value = "/map/result")
     @ResponseBody
-    public ResponseEntity<Map> mapResult(){
+    public ResponseEntity<Map> mapResult() {
         return ResponseEntity.ok(map);
     }
 
     @PostMapping(value = "/map/reset")
     @ResponseBody
-    public ResponseEntity<String> mapReset(){
+    public ResponseEntity<String> mapReset() {
         map.clear();
         String result = "{\"result\":\"success\"}";
         return ResponseEntity.ok(result);
@@ -107,7 +114,7 @@ public class UploadController {
 
     @PostMapping(value = "/doUpload")
     @ResponseBody
-    public ResponseEntity<List<String>> doUpload(@RequestParam(value = "file") MultipartFile file){
+    public ResponseEntity<List<String>> doUpload(@RequestParam(value = "file") MultipartFile file) {
 
         // 1 传输用户上传的file文件，得到图片的具体id
         String[] params = getIdBySendFile(file);
@@ -128,7 +135,7 @@ public class UploadController {
         long specificTime = 50;
         long times = count.incrementAndGet();
 
-        if (hooks > specificTime){
+        if (hooks > specificTime) {
             String record = "普通id搜索，搜索时间为：" + hooks + "ms";
             map.put(times, record);
             LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size() + "次，普通id搜索花费：" + hooks + "ms");
@@ -154,7 +161,7 @@ public class UploadController {
 
     @PostMapping(value = "/uuidDoUpload")
     @ResponseBody
-    public ResponseEntity<List<String>> uuidDoUpload(@RequestParam("file") MultipartFile file){
+    public ResponseEntity<List<String>> uuidDoUpload(@RequestParam("file") MultipartFile file) {
 
         // 1 传输用户上传的file文件，得到图片的具体id
         String[] params = getUuIdBySendFile(file);
@@ -173,12 +180,60 @@ public class UploadController {
         LOGGER.info("uuid从ES搜索相关数据共耗时：" + hooks + "ms");
 
         long times = count.incrementAndGet();
-        if (hooks > specificTime){
+        if (hooks > specificTime) {
             String record = "uuid搜索，搜索时间为：" + hooks + "ms";
             map.put(times, record);
-            LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size()+ "次，uuid搜索花费：" + hooks + "ms");
+            LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size() + "次，uuid搜索花费：" + hooks + "ms");
 
         }
+        return ResponseEntity.ok(urlList);
+    }
+
+
+    @PostMapping(value = "/sqliteDoupload")
+    @ResponseBody
+    public ResponseEntity<List<String>> sqliteDoUpload(@RequestParam("file") MultipartFile file) throws SQLException {
+
+        // 1 传输用户上传的file文件，得到图片的具体id
+        String[] params = getUuIdBySendFile(file);
+        StringBuilder stringBuilder = new StringBuilder("");
+        for (String param : params) {
+            stringBuilder.append("'" + param + "',");
+        }
+
+        Connection connection = dataSource.getConnection();
+        // 截去尾部的逗号
+        stringBuilder.setLength(stringBuilder.length() - 1);
+
+        String sql = "SELECT id,url FROM imageurl WHERE id in (" + stringBuilder.toString() + ")";
+
+        long startTime = System.nanoTime();
+        PreparedStatement stmt = connection.prepareStatement(sql);
+        ResultSet rs = stmt.executeQuery();
+        long endTime = System.nanoTime();
+
+        List<String> urlList = new ArrayList<>();
+        int hits = 0;
+        while (rs.next()) {
+            hits++;
+            //String  id = rs.getString("id");
+            String url = rs.getString("url");
+            urlList.add(url);
+            //System.out.println( "id = " + id );
+            //System.out.println( "url = " + url );
+        }
+        long hooks = (endTime - startTime)/1000000;
+        long times = count.incrementAndGet();
+        // sqlite超出10ms就记录
+        if (hooks > 10) {
+            String record = "sqlite搜索，搜索时间为：" + hooks + "ms";
+            map.put(times, record);
+            LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size() + "次，sqlite搜索花费：" + hooks + "ms");
+
+        }
+        LOGGER.info("sqlite 执行sql花费：" + (endTime - startTime) + "ns, hits:" + hits);
+
+        connection.close();
         return ResponseEntity.ok(urlList);
     }
 
@@ -186,7 +241,7 @@ public class UploadController {
      * 将用户传递的file文件发送给图片搜索引擎，获得S3上的图片uuid
      *
      * @param file 用户上传的文件
-     * @return  String[] 图片id的数组集
+     * @return String[] 图片id的数组集
      */
     private String[] getUuIdBySendFile(MultipartFile file) {
         long startTime = System.currentTimeMillis();
@@ -200,7 +255,7 @@ public class UploadController {
 
         String[] params = set.toArray(new String[0]);
         long endTime = System.currentTimeMillis();
-        LOGGER.info("通过图片搜索引擎获得图片id共耗时：" + (endTime - startTime) + "ms");
+        // LOGGER.info("通过图片搜索引擎获得图片uuid共耗时：" + (endTime - startTime) + "ms");
         return params;
     }
 
@@ -208,7 +263,7 @@ public class UploadController {
      * 将用户传递的file文件发送给图片搜索引擎，获得S3上的图片id
      *
      * @param file 用户上传的文件
-     * @return  String[] 图片id的数组集
+     * @return String[] 图片id的数组集
      */
     private String[] getIdBySendFile(MultipartFile file) {
         long startTime = System.currentTimeMillis();
@@ -222,7 +277,7 @@ public class UploadController {
         }
         String[] params = set.toArray(new String[0]);
         long endTime = System.currentTimeMillis();
-        LOGGER.info("通过图片搜索引擎获得图片id共耗时：" + (endTime - startTime) + "ms");
+        // LOGGER.info("通过图片搜索引擎获得图片id共耗时：" + (endTime - startTime) + "ms");
         return params;
     }
 
