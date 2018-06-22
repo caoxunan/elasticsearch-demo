@@ -22,6 +22,12 @@ public class EsConfig {
 
         Settings settings = Settings.builder()
                 .put("cluster.name","my-application")
+                // set to true to ignore cluster name validation of connected nodes
+                // .put("client.transport.ignore_cluster_name", true)
+                // The time to wait for a ping response from a node, defaults to 5s
+                // .put("client.transport.ping_timeout", 5)
+                // How often to sample/ping the nodes listed and connected.defaults to 5s
+                // .put("client.transport,nodes_sampler_interval", 5)
                 .build();
         TransportClient client = new PreBuiltTransportClient(settings);
         client.addTransportAddress(node);

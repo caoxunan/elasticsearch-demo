@@ -27,6 +27,31 @@
 
     <dependencies>
 
+		<!--<dependency>-->
+			<!--<groupId>org.apache.spark</groupId>-->
+			<!--<artifactId>spark-core_2.11</artifactId>-->
+			<!--<version>2.2.0</version>-->
+			<!--<scope>provided</scope>-->
+			<!--<exclusions>-->
+				<!--<exclusion>-->
+					<!--<artifactId>log4j</artifactId>-->
+					<!--<groupId>log4j</groupId>-->
+				<!--</exclusion>-->
+				<!--<exclusion>-->
+					<!--<artifactId>slf4j-log4j12</artifactId>-->
+					<!--<groupId>org.slf4j</groupId>-->
+				<!--</exclusion>-->
+			<!--</exclusions>-->
+
+		<!--</dependency>-->
+
+		<!--<dependency>-->
+			<!--<groupId>org.apache.spark</groupId>-->
+			<!--<artifactId>spark-sql_2.11</artifactId>-->
+			<!--<version>2.2.0</version>-->
+			<!--<scope>provided</scope>-->
+		<!--</dependency>-->
+
         <dependency>
             <groupId>org.elasticsearch.client</groupId>
             <artifactId>transport</artifactId>
@@ -73,6 +98,44 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!--compiler插件-->
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.5.1</version>
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+					<encoding>UTF-8</encoding>
+				</configuration>
+			</plugin>
+
+			<!-- if you want to create a single jar containing your application and all dependencies,
+			 you can use maven-shade-plugin and configure as follow -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>2.4.1</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals><goal>shade</goal></goals>
+						<configuration>
+							<transformers>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+								<!-- if you have a main class you want to automatically  call when running java -jar yourjar.jar,
+								 just add it to the transformers -->
+								<!--<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">-->
+									<!--<mainClass>org.elasticsearch.demo.Generate</mainClass>-->
+								<!--</transformer>-->
+							</transformers>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+
 		</plugins>
 	</build>
 
