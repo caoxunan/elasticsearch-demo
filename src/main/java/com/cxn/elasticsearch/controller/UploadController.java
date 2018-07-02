@@ -44,35 +44,35 @@ public class UploadController {
      */
     public static List<String> uuidList;
 
-    static {
-        uuidList = new ArrayList<>(30000000);
-
-        // File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/jsonfile/uuidFile");
-        File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/sqlitefile/uuidFile");
-
-        FileReader fileReader = null;
-        try {
-
-            fileReader = new FileReader(uuidFile);
-            BufferedReader bufferedReader = new BufferedReader(fileReader);
-
-            String temp = "";
-            int i = 0;
-            while ((temp = bufferedReader.readLine()) != null) {
-                if (i % 1000000 == 0) {
-
-                    LOGGER.info("正在初始化随机集合～,已完成 " + i + "条数据。");
-                }
-                uuidList.add(temp);
-                i++;
-                if (i == 20000000) {
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+    //static {
+    //    uuidList = new ArrayList<>(30000000);
+    //
+    //    // File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/jsonfile/uuidFile");
+    //    File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/sqlitefile/uuidFile");
+    //
+    //    FileReader fileReader = null;
+    //    try {
+    //
+    //        fileReader = new FileReader(uuidFile);
+    //        BufferedReader bufferedReader = new BufferedReader(fileReader);
+    //
+    //        String temp = "";
+    //        int i = 0;
+    //        while ((temp = bufferedReader.readLine()) != null) {
+    //            if (i % 1000000 == 0) {
+    //
+    //                LOGGER.info("正在初始化随机集合～,已完成 " + i + "条数据。");
+    //            }
+    //            uuidList.add(temp);
+    //            i++;
+    //            if (i == 20000000) {
+    //                break;
+    //            }
+    //        }
+    //    } catch (Exception e) {
+    //        e.printStackTrace();
+    //    }
+    //}
 
     /**
      * 记录访问的次数

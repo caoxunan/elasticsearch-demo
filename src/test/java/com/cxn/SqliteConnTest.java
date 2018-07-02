@@ -50,7 +50,7 @@ public class SqliteConnTest {
             e.printStackTrace();
         }
     }
-    @Test
+    //@Test
     public void testSqliteConn() {
         Set<String> set = new HashSet<>(32);
         int num = 30;
