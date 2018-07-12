@@ -1,29 +1,11 @@
 package com.cxn.elasticsearch.controller;
 
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.SearchHits;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.apache.commons.io.FileUtils;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import javax.sql.DataSource;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
 
 /**
  * @program: elasticsearch-demo
@@ -35,250 +17,33 @@ import java.util.concurrent.atomic.AtomicLong;
 @Controller
 public class UploadController {
 
-    static final Logger LOGGER = LoggerFactory.getLogger(UploadController.class);
-
-    @Autowired
-    private DataSource dataSource;
-    /**
-     * 初始化uuid的随机数组
-     */
-    public static List<String> uuidList;
-
-    //static {
-    //    uuidList = new ArrayList<>(30000000);
-    //
-    //    // File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/jsonfile/uuidFile");
-    //    File uuidFile = new File("/Users/caoxunan/learn-git/elasticsearch-demo/sqlitefile/uuidFile");
-    //
-    //    FileReader fileReader = null;
-    //    try {
-    //
-    //        fileReader = new FileReader(uuidFile);
-    //        BufferedReader bufferedReader = new BufferedReader(fileReader);
-    //
-    //        String temp = "";
-    //        int i = 0;
-    //        while ((temp = bufferedReader.readLine()) != null) {
-    //            if (i % 1000000 == 0) {
-    //
-    //                LOGGER.info("正在初始化随机集合～,已完成 " + i + "条数据。");
-    //            }
-    //            uuidList.add(temp);
-    //            i++;
-    //            if (i == 20000000) {
-    //                break;
-    //            }
-    //        }
-    //    } catch (Exception e) {
-    //        e.printStackTrace();
-    //    }
-    //}
-
-    /**
-     * 记录访问的次数
-     */
-    public static AtomicLong count = new AtomicLong(0);
-    /**
-     * 当es的搜索的时间超过该数值的时候，会记录到map中
-     */
-    public static long specificTime = 40;
-
-    /**
-     * 临时记录访问次数
-     * key:当前第n次访问
-     * value：查询ES花费的时间（大于指定时间才会被记录）
-     */
-    public static Map<Long, String> map = new ConcurrentHashMap<>();
-
-    @Autowired
-    private TransportClient client;
-
-    @GetMapping(value = "/")
-    public String upload() {
-        return "upload";
-    }
-
-    @GetMapping(value = "/map/result")
-    @ResponseBody
-    public ResponseEntity<Map> mapResult() {
-        return ResponseEntity.ok(map);
-    }
-
-    @PostMapping(value = "/map/reset")
-    @ResponseBody
-    public ResponseEntity<String> mapReset() {
-        map.clear();
-        String result = "{\"result\":\"success\"}";
-        return ResponseEntity.ok(result);
-    }
-
-    @PostMapping(value = "/doUpload")
-    @ResponseBody
-    public ResponseEntity<List<String>> doUpload(@RequestParam(value = "file") MultipartFile file) {
-
-        // 1 传输用户上传的file文件，得到图片的具体id
-        String[] params = getIdBySendFile(file);
-
-        // 2 使用ElasticSearch相关API到索引库中查询结果
-        SearchResponse response = client.prepareSearch("imagesearch")
-                .setTypes("test")
-                .setQuery(QueryBuilders.termsQuery("id", params))                 // Query
-                .setSize(60)
-                .get();
-
-        // 3 解析响应结果
-        List<String> urlList = getUrlListByResponse(response);
-
-        long hooks = response.getTookInMillis();
-        LOGGER.info("普通id从ES搜索相关数据共耗时：" + hooks + "ms");
-
-        long specificTime = 50;
-        long times = count.incrementAndGet();
-
-        if (hooks > specificTime) {
-            String record = "普通id搜索，搜索时间为：" + hooks + "ms";
-            map.put(times, record);
-            LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size() + "次，普通id搜索花费：" + hooks + "ms");
+    // 下载文件
+    @RequestMapping("/download")
+    @CrossOrigin(origins = "*", maxAge = 3600)
+    public void download1(HttpServletResponse response) throws Exception {
+        String filePath = "file/SpringMVC.xmind";
+        File file = new File(filePath);
+        OutputStream out = null;
+        try {
+            response.reset();
+            response.setContentType("application/octet-stream; charset=utf-8");
+            //设置响应头和客户端保存文件名
+            response.setHeader("Content-Disposition", "attachment; filename=" + file.getName());
+            out = response.getOutputStream();
+            out.write(FileUtils.readFileToByteArray(file));
+            out.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (out != null) {
+                try {
+                    out.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
-
-        return ResponseEntity.ok(urlList);
-    }
-
-    private List<String> getUrlListByResponse(SearchResponse response) {
-
-        List<String> urlList = new ArrayList<>();
-
-        SearchHits hits = response.getHits();
-        Iterator<SearchHit> iterator = hits.iterator();
-        while (iterator.hasNext()) {
-            SearchHit hit = iterator.next();
-            Map<String, Object> source = hit.getSource();
-            String url = (String) source.get("url");
-            urlList.add(url);
-        }
-        return urlList;
-    }
-
-    @PostMapping(value = "/uuidDoUpload")
-    @ResponseBody
-    public ResponseEntity<List<String>> uuidDoUpload(@RequestParam("file") MultipartFile file) {
-
-        // 1 传输用户上传的file文件，得到图片的具体id
-        String[] params = getUuIdBySendFile(file);
-
-        // 2 使用ElasticSearch相关API到索引库中查询结果
-        SearchResponse response = client.prepareSearch("uuidsearch")
-                .setTypes("test")
-                .setQuery(QueryBuilders.termsQuery("id", params))                 // Query
-                .setSize(60)
-                .get();
-
-        // 3 解析响应结果
-        List<String> urlList = getUrlListByResponse(response);
-
-        long hooks = response.getTookInMillis();
-        LOGGER.info("uuid从ES搜索相关数据共耗时：" + hooks + "ms");
-
-        long times = count.incrementAndGet();
-        if (hooks > specificTime) {
-            String record = "uuid搜索，搜索时间为：" + hooks + "ms";
-            map.put(times, record);
-            LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size() + "次，uuid搜索花费：" + hooks + "ms");
-
-        }
-        return ResponseEntity.ok(urlList);
-    }
-
-
-    @PostMapping(value = "/sqliteDoupload")
-    @ResponseBody
-    public ResponseEntity<List<String>> sqliteDoUpload(@RequestParam("file") MultipartFile file) throws SQLException {
-
-        // 1 传输用户上传的file文件，得到图片的具体id
-        String[] params = getUuIdBySendFile(file);
-        StringBuilder stringBuilder = new StringBuilder("");
-        for (String param : params) {
-            stringBuilder.append("'" + param + "',");
-        }
-
-        Connection connection = dataSource.getConnection();
-        // 截去尾部的逗号
-        stringBuilder.setLength(stringBuilder.length() - 1);
-
-        String sql = "SELECT id,url FROM imageurl WHERE id in (" + stringBuilder.toString() + ")";
-
-        long startTime = System.nanoTime();
-        PreparedStatement stmt = connection.prepareStatement(sql);
-        ResultSet rs = stmt.executeQuery();
-        long endTime = System.nanoTime();
-
-        List<String> urlList = new ArrayList<>();
-        int hits = 0;
-        while (rs.next()) {
-            hits++;
-            //String  id = rs.getString("id");
-            String url = rs.getString("url");
-            urlList.add(url);
-            //System.out.println( "id = " + id );
-            //System.out.println( "url = " + url );
-        }
-        long hooks = (endTime - startTime)/1000000;
-        long times = count.incrementAndGet();
-        // sqlite超出10ms就记录
-        if (hooks > 10) {
-            String record = "sqlite搜索，搜索时间为：" + hooks + "ms";
-            map.put(times, record);
-            LOGGER.info("超出" + specificTime + "ms以上的搜索发生了" + map.size() + "次，sqlite搜索花费：" + hooks + "ms");
-
-        }
-        LOGGER.info("sqlite 执行sql花费：" + (endTime - startTime) + "ns, hits:" + hits);
-
-        connection.close();
-        return ResponseEntity.ok(urlList);
-    }
-
-    /**
-     * 将用户传递的file文件发送给图片搜索引擎，获得S3上的图片uuid
-     *
-     * @param file 用户上传的文件
-     * @return String[] 图片id的数组集
-     */
-    private String[] getUuIdBySendFile(MultipartFile file) {
-        long startTime = System.currentTimeMillis();
-        Set<String> set = new HashSet<>(32);
-        int num = 30;
-        while (set.size() < num) {
-            Random random = new Random();
-            int rand = random.nextInt(20000000);
-            set.add(uuidList.get(rand));
-        }
-
-        String[] params = set.toArray(new String[0]);
-        long endTime = System.currentTimeMillis();
-        // LOGGER.info("通过图片搜索引擎获得图片uuid共耗时：" + (endTime - startTime) + "ms");
-        return params;
-    }
-
-    /**
-     * 将用户传递的file文件发送给图片搜索引擎，获得S3上的图片id
-     *
-     * @param file 用户上传的文件
-     * @return String[] 图片id的数组集
-     */
-    private String[] getIdBySendFile(MultipartFile file) {
-        long startTime = System.currentTimeMillis();
-        // 创建随机id模拟图片搜索引擎返回具体数据
-        Set<String> set = new HashSet<>(32);
-        int num = 30;
-        while (set.size() < num) {
-            Random random = new Random();
-            int rand = random.nextInt(50000000);
-            set.add(String.valueOf(rand));
-        }
-        String[] params = set.toArray(new String[0]);
-        long endTime = System.currentTimeMillis();
-        // LOGGER.info("通过图片搜索引擎获得图片id共耗时：" + (endTime - startTime) + "ms");
-        return params;
+        System.out.println("下载完成！");
     }
 
 }
